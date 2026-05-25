@@ -32,7 +32,7 @@ export async function POST(req: Request) {
       const { data: profile } = await supabase
         .from("profiles")
         .select(
-        "plan, religion, message_count, daily_messages, last_message_reset, subscription_status, subscription_expires_at"
+          "plan, religion, message_count, daily_messages, last_message_reset, subscription_status, subscription_expires_at"
         )
         .eq("id", userId)
         .single();
@@ -49,25 +49,25 @@ export async function POST(req: Request) {
     }
 
     const isMemoryPlan = plan === "memory";
+
     const now = new Date();
 
     if (
-    plan !== "free" &&
-    (
-    subscriptionStatus !== "active" ||
-    !subscriptionExpiresAt ||
-    new Date(subscriptionExpiresAt) < now
-    )
+      userId &&
+      plan !== "free" &&
+      (subscriptionStatus !== "active" ||
+        !subscriptionExpiresAt ||
+        new Date(subscriptionExpiresAt) < now)
     ) {
-    await supabase
-    .from("profiles")
-    .update({
-      plan: "free",
-      subscription_status: "expired",
-    })
-    .eq("id", userId);
+      await supabase
+        .from("profiles")
+        .update({
+          plan: "free",
+          subscription_status: "expired",
+        })
+        .eq("id", userId);
 
-    plan = "free";
+      plan = "free";
     }
 
     const today = new Date().toDateString();
@@ -95,12 +95,14 @@ export async function POST(req: Request) {
       });
     }
 
-    if (isMemoryPlan && userId) {
+    const isActiveMemoryPlan = plan === "memory";
+
+    if (isActiveMemoryPlan && userId) {
       const { data: memoryData } = await supabase
         .from("user_memories")
         .select("summary")
         .eq("user_id", userId)
-        .single();
+        .maybeSingle();
 
       if (memoryData?.summary) {
         memorySummary = memoryData.summary;
@@ -150,7 +152,7 @@ Memória do usuário:
 ${memorySummary || "Nenhuma memória registrada ainda."}
 
 ${
-  isMemoryPlan
+  isActiveMemoryPlan
     ? "Este usuário possui memória ativa. Considere o histórico emocional e espiritual dele durante a conversa."
     : "Este usuário não possui memória ativa. Responda apenas com base na mensagem atual."
 }
@@ -172,20 +174,6 @@ ${
     });
 
     const reply = completion.choices[0].message.content || "";
-    if (userId) {
-    await supabase.from("messages").insert([
-    {
-      user_id: userId,
-      role: "user",
-      content: message,
-    },
-    {
-      user_id: userId,
-      role: "assistant",
-      content: reply,
-    },
-    ]);
-    }
 
     if (userId) {
       const newCount = messageCount + 1;
@@ -198,16 +186,7 @@ ${
         })
         .eq("id", userId);
 
-console.log("DEBUG MEMÓRIA:", {
-  plan,
-  isMemoryPlan,
-  messageCount,
-  newCount,
-  resto: newCount % 10,
-  userId,
-});
-
-      if (isMemoryPlan && newCount % 10 === 0) {
+      if (isActiveMemoryPlan && newCount % 10 === 0) {
         const { data: recentMessages } = await supabase
           .from("messages")
           .select("role, content")
@@ -254,35 +233,35 @@ ${conversationText}
           memoryCompletion.choices[0].message.content || memorySummary;
 
         const { data: existingMemory } = await supabase
-  .from("user_memories")
-  .select("id")
-  .eq("user_id", userId)
-  .maybeSingle();
+          .from("user_memories")
+          .select("id")
+          .eq("user_id", userId)
+          .maybeSingle();
 
-if (existingMemory) {
-  const { error: updateMemoryError } = await supabase
-    .from("user_memories")
-    .update({
-      summary: newSummary,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("user_id", userId);
+        if (existingMemory) {
+          const { error: updateMemoryError } = await supabase
+            .from("user_memories")
+            .update({
+              summary: newSummary,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("user_id", userId);
 
-  if (updateMemoryError) {
-    console.log("ERRO AO ATUALIZAR MEMÓRIA:", updateMemoryError);
-  }
-} else {
-  const { error: insertMemoryError } = await supabase
-    .from("user_memories")
-    .insert({
-      user_id: userId,
-      summary: newSummary,
-    });
+          if (updateMemoryError) {
+            console.log("ERRO AO ATUALIZAR MEMÓRIA:", updateMemoryError);
+          }
+        } else {
+          const { error: insertMemoryError } = await supabase
+            .from("user_memories")
+            .insert({
+              user_id: userId,
+              summary: newSummary,
+            });
 
-  if (insertMemoryError) {
-    console.log("ERRO AO CRIAR MEMÓRIA:", insertMemoryError);
-  }
-}
+          if (insertMemoryError) {
+            console.log("ERRO AO CRIAR MEMÓRIA:", insertMemoryError);
+          }
+        }
       }
     }
 

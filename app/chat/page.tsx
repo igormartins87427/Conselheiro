@@ -21,10 +21,13 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
+  const [editingConversationId, setEditingConversationId] = useState<
+    string | null
+  >(null);
   const [newConversationTitle, setNewConversationTitle] = useState("");
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [userName, setUserName] = useState("");
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
 
   const welcomeMessage: Message = {
     role: "assistant",
@@ -179,8 +182,17 @@ export default function ChatPage() {
 
     if (!user) return;
 
-    await supabase.from("messages").delete().eq("conversation_id", id).eq("user_id", user.id);
-    await supabase.from("conversations").delete().eq("id", id).eq("user_id", user.id);
+    await supabase
+      .from("messages")
+      .delete()
+      .eq("conversation_id", id)
+      .eq("user_id", user.id);
+
+    await supabase
+      .from("conversations")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", user.id);
 
     await loadConversations(user.id);
 
@@ -194,41 +206,6 @@ export default function ChatPage() {
     await supabase.auth.signOut();
     window.location.href = "/";
   }
-
-  async function handleCustomerPortal() {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return;
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("stripe_customer_id")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile?.stripe_customer_id) {
-    window.location.href = "/plans";
-    return;
-  }
-
-  const response = await fetch("/api/customer-portal", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      customerId: profile.stripe_customer_id,
-    }),
-  });
-
-  const data = await response.json();
-
-  if (data.url) {
-    window.location.href = data.url;
-  }
-}
 
   async function handleSendMessage() {
     if (!message.trim()) return;
@@ -268,19 +245,20 @@ export default function ChatPage() {
       });
 
       const data = await response.json();
-      if (data.limitReached) {
-  setMessages((prev) => [
-    ...prev,
-    {
-      role: "assistant",
-      content: data.reply,
-      limitReached: true,
-    },
-  ]);
 
-  setLoading(false);
-  return;
-}
+      if (data.limitReached) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: data.reply,
+            limitReached: true,
+          },
+        ]);
+
+        setLoading(false);
+        return;
+      }
 
       await supabase.from("messages").insert({
         user_id: user.id,
@@ -289,7 +267,10 @@ export default function ChatPage() {
         content: data.reply,
       });
 
-      setMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: data.reply },
+      ]);
 
       const { data: currentConversation } = await supabase
         .from("conversations")
@@ -344,7 +325,9 @@ export default function ChatPage() {
               <div
                 key={conversation.id}
                 className={`flex items-center gap-2 px-3 py-2 rounded-2xl transition ${
-                  conversationId === conversation.id ? "bg-[#EFE6D7]" : "hover:bg-[#F8F5EF]"
+                  conversationId === conversation.id
+                    ? "bg-[#EFE6D7]"
+                    : "hover:bg-[#F8F5EF]"
                 }`}
               >
                 <button
@@ -382,16 +365,25 @@ export default function ChatPage() {
         </aside>
 
         <section className="flex-1 flex flex-col">
-          <header className="bg-white border-b border-[#E8E1D4] px-6 py-5 shadow-sm">
-            <div className="max-w-5xl mx-auto flex items-center justify-between">
-              <div>
-                <h2 className="text-3xl font-semibold text-[#1E2A38]">
-                  Conselheiro da Fé
-                </h2>
+          <header className="bg-white border-b border-[#E8E1D4] px-4 md:px-6 py-4 md:py-5 shadow-sm">
+            <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
+              <div className="flex items-center min-w-0">
+                <button
+                  onClick={() => setShowMobileSidebar(true)}
+                  className="md:hidden bg-[#C8A96B] text-white px-4 py-2 rounded-xl mr-3 shrink-0"
+                >
+                  Menu
+                </button>
 
-                <p className="text-[#6B7280] mt-1">
-                  Um espaço de acolhimento, reflexão e escuta.
-                </p>
+                <div className="min-w-0">
+                  <h2 className="text-2xl md:text-3xl font-semibold text-[#1E2A38] truncate">
+                    Conselheiro da Fé
+                  </h2>
+
+                  <p className="text-[#6B7280] mt-1 text-sm md:text-base hidden sm:block">
+                    Um espaço de acolhimento, reflexão e escuta.
+                  </p>
+                </div>
               </div>
 
               <div className="relative hidden md:block">
@@ -405,11 +397,13 @@ export default function ChatPage() {
                 {showUserMenu && (
                   <div className="absolute right-0 mt-3 w-60 bg-white rounded-2xl shadow-2xl border border-[#ECE4D7] overflow-hidden z-50">
                     <button
-  onClick={handleCustomerPortal}
-  className="w-full text-left px-5 py-4 hover:bg-[#F8F5EF] transition text-[#1E2A38]"
->
-  Gerenciar assinatura
-</button>
+                      onClick={() => {
+                        window.location.href = "/plans";
+                      }}
+                      className="w-full text-left px-5 py-4 hover:bg-[#F8F5EF] transition text-[#1E2A38]"
+                    >
+                      Meu plano
+                    </button>
 
                     <button
                       onClick={() => {
@@ -432,34 +426,36 @@ export default function ChatPage() {
             </div>
           </header>
 
-          <div className="flex-1 overflow-y-auto px-4 py-8">
-            <div className="max-w-4xl mx-auto flex flex-col gap-6">
+          <div className="flex-1 overflow-y-auto px-4 py-6 md:py-8">
+            <div className="max-w-4xl mx-auto flex flex-col gap-5 md:gap-6">
               {messages.map((msg, index) => (
                 <div
                   key={index}
-                  className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                  className={`flex ${
+                    msg.role === "user" ? "justify-end" : "justify-start"
+                  }`}
                 >
                   <div
-                    className={`max-w-[80%] rounded-3xl px-6 py-5 shadow-sm leading-relaxed whitespace-pre-wrap ${
+                    className={`max-w-[88%] md:max-w-[80%] rounded-3xl px-5 md:px-6 py-4 md:py-5 shadow-sm leading-relaxed whitespace-pre-wrap ${
                       msg.role === "user"
                         ? "bg-[#C8A96B] text-white"
                         : "bg-white text-[#1E2A38] border border-[#ECE4D7]"
                     }`}
                   >
                     <div>
-  <p>{msg.content}</p>
+                      <p>{msg.content}</p>
 
-  {msg.limitReached && (
-    <button
-      onClick={() => {
-        window.location.href = "/plans";
-      }}
-      className="mt-5 bg-[#C8A96B] hover:bg-[#B89555] transition-all duration-300 text-white px-6 py-3 rounded-2xl shadow"
-    >
-      Ver planos
-    </button>
-  )}
-</div>
+                      {msg.limitReached && (
+                        <button
+                          onClick={() => {
+                            window.location.href = "/plans";
+                          }}
+                          className="mt-5 bg-[#C8A96B] hover:bg-[#B89555] transition-all duration-300 text-white px-6 py-3 rounded-2xl shadow"
+                        >
+                          Ver planos
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -474,8 +470,8 @@ export default function ChatPage() {
             </div>
           </div>
 
-          <footer className="bg-white border-t border-[#E8E1D4] px-4 py-5">
-            <div className="max-w-4xl mx-auto flex gap-4">
+          <footer className="bg-white border-t border-[#E8E1D4] px-3 md:px-4 py-4 md:py-5">
+            <div className="max-w-4xl mx-auto flex gap-3 md:gap-4">
               <input
                 type="text"
                 placeholder="Compartilhe o que está em seu coração..."
@@ -484,13 +480,13 @@ export default function ChatPage() {
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleSendMessage();
                 }}
-                className="flex-1 border border-[#DDD6C8] rounded-2xl px-5 py-4 outline-none focus:border-[#C8A96B] bg-[#FAF8F4]"
+                className="flex-1 border border-[#DDD6C8] rounded-2xl px-4 md:px-5 py-4 outline-none focus:border-[#C8A96B] bg-[#FAF8F4] min-w-0"
               />
 
               <button
                 onClick={handleSendMessage}
                 disabled={loading}
-                className="bg-[#C8A96B] hover:bg-[#B89555] disabled:opacity-50 transition-all duration-300 text-white px-8 rounded-2xl shadow"
+                className="bg-[#C8A96B] hover:bg-[#B89555] disabled:opacity-50 transition-all duration-300 text-white px-5 md:px-8 rounded-2xl shadow"
               >
                 Enviar
               </button>
@@ -498,8 +494,80 @@ export default function ChatPage() {
           </footer>
         </section>
 
+        {showMobileSidebar && (
+          <div className="fixed inset-0 z-50 bg-black/40 md:hidden">
+            <div className="h-full w-80 max-w-[85%] bg-white p-5 shadow-2xl flex flex-col">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-semibold text-[#1E2A38]">
+                  Conversas
+                </h2>
+
+                <button
+                  onClick={() => setShowMobileSidebar(false)}
+                  className="text-3xl text-[#4A5565]"
+                >
+                  ×
+                </button>
+              </div>
+
+              <button
+                onClick={() => {
+                  handleNewConversation();
+                  setShowMobileSidebar(false);
+                }}
+                className="w-full bg-[#C8A96B] hover:bg-[#B89555] transition-all duration-300 text-white py-3 rounded-2xl shadow mb-6"
+              >
+                Nova conversa
+              </button>
+
+              <div className="flex flex-col gap-3 overflow-y-auto flex-1">
+                {conversations.map((conversation) => (
+                  <button
+                    key={conversation.id}
+                    onClick={() => {
+                      handleSelectConversation(conversation.id);
+                      setShowMobileSidebar(false);
+                    }}
+                    className={`text-left px-4 py-3 rounded-2xl transition ${
+                      conversationId === conversation.id
+                        ? "bg-[#EFE6D7] text-[#1E2A38] font-semibold"
+                        : "hover:bg-[#F8F5EF] text-[#4A5565]"
+                    }`}
+                  >
+                    {conversation.title}
+                  </button>
+                ))}
+              </div>
+
+              <div className="border-t border-[#E8E1D4] mt-6 pt-6 flex flex-col gap-4">
+                <button
+                  onClick={() => {
+                    window.location.href = "/plans";
+                  }}
+                  className="text-left text-[#1E2A38]"
+                >
+                  Meu plano
+                </button>
+
+                <button
+                  onClick={() => {
+                    window.location.href = "/settings";
+                  }}
+                  className="text-left text-[#1E2A38]"
+                >
+                  Configurações
+                </button>
+
+                <button onClick={handleLogout} className="text-left text-red-500">
+                  Sair
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {editingConversationId && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
             <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl">
               <h2 className="text-2xl font-semibold text-[#1E2A38] mb-6">
                 Renomear conversa
