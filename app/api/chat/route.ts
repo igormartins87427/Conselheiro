@@ -198,6 +198,15 @@ ${
         })
         .eq("id", userId);
 
+console.log("DEBUG MEMÓRIA:", {
+  plan,
+  isMemoryPlan,
+  messageCount,
+  newCount,
+  resto: newCount % 10,
+  userId,
+});
+
       if (isMemoryPlan && newCount % 10 === 0) {
         const { data: recentMessages } = await supabase
           .from("messages")
@@ -245,25 +254,35 @@ ${conversationText}
           memoryCompletion.choices[0].message.content || memorySummary;
 
         const { data: existingMemory } = await supabase
-          .from("user_memories")
-          .select("id")
-          .eq("user_id", userId)
-          .single();
+  .from("user_memories")
+  .select("id")
+  .eq("user_id", userId)
+  .maybeSingle();
 
-        if (existingMemory) {
-          await supabase
-            .from("user_memories")
-            .update({
-              summary: newSummary,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("user_id", userId);
-        } else {
-          await supabase.from("user_memories").insert({
-            user_id: userId,
-            summary: newSummary,
-          });
-        }
+if (existingMemory) {
+  const { error: updateMemoryError } = await supabase
+    .from("user_memories")
+    .update({
+      summary: newSummary,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("user_id", userId);
+
+  if (updateMemoryError) {
+    console.log("ERRO AO ATUALIZAR MEMÓRIA:", updateMemoryError);
+  }
+} else {
+  const { error: insertMemoryError } = await supabase
+    .from("user_memories")
+    .insert({
+      user_id: userId,
+      summary: newSummary,
+    });
+
+  if (insertMemoryError) {
+    console.log("ERRO AO CRIAR MEMÓRIA:", insertMemoryError);
+  }
+}
       }
     }
 
