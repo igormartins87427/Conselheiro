@@ -25,12 +25,14 @@ export async function POST(req: Request) {
     let messageCount = 0;
     let dailyMessages = 0;
     let lastMessageReset = "";
+    let subscriptionStatus = "inactive";
+    let subscriptionExpiresAt = "";
 
     if (userId) {
       const { data: profile } = await supabase
         .from("profiles")
         .select(
-          "plan, religion, message_count, daily_messages, last_message_reset"
+        "plan, religion, message_count, daily_messages, last_message_reset, subscription_status, subscription_expires_at"
         )
         .eq("id", userId)
         .single();
@@ -41,10 +43,32 @@ export async function POST(req: Request) {
         messageCount = profile.message_count || 0;
         dailyMessages = profile.daily_messages || 0;
         lastMessageReset = profile.last_message_reset || "";
+        subscriptionStatus = profile.subscription_status || "inactive";
+        subscriptionExpiresAt = profile.subscription_expires_at || "";
       }
     }
 
     const isMemoryPlan = plan === "memory";
+    const now = new Date();
+
+    if (
+    plan !== "free" &&
+    (
+    subscriptionStatus !== "active" ||
+    !subscriptionExpiresAt ||
+    new Date(subscriptionExpiresAt) < now
+    )
+    ) {
+    await supabase
+    .from("profiles")
+    .update({
+      plan: "free",
+      subscription_status: "expired",
+    })
+    .eq("id", userId);
+
+    plan = "free";
+    }
 
     const today = new Date().toDateString();
     const lastResetDay = lastMessageReset
@@ -148,6 +172,20 @@ ${
     });
 
     const reply = completion.choices[0].message.content || "";
+    if (userId) {
+    await supabase.from("messages").insert([
+    {
+      user_id: userId,
+      role: "user",
+      content: message,
+    },
+    {
+      user_id: userId,
+      role: "assistant",
+      content: reply,
+    },
+    ]);
+    }
 
     if (userId) {
       const newCount = messageCount + 1;

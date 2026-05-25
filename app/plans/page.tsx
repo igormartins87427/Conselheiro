@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
 export default function PlansPage() {
-  const [stripeCustomerId, setStripeCustomerId] = useState<string | null>(null);
   const [currentPlan, setCurrentPlan] = useState("free");
+  const [subscriptionStatus, setSubscriptionStatus] = useState("inactive");
+  const [subscriptionExpiresAt, setSubscriptionExpiresAt] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadProfile() {
@@ -17,46 +18,19 @@ export default function PlansPage() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("plan, stripe_customer_id")
+        .select("plan, subscription_status, subscription_expires_at")
         .eq("id", user.id)
         .single();
 
       if (profile) {
         setCurrentPlan(profile.plan || "free");
-        setStripeCustomerId(profile.stripe_customer_id || null);
+        setSubscriptionStatus(profile.subscription_status || "inactive");
+        setSubscriptionExpiresAt(profile.subscription_expires_at || null);
       }
     }
 
     loadProfile();
   }, []);
-
-  async function handleCustomerPortal() {
-    if (!stripeCustomerId) {
-      alert("Assinatura não encontrada para este usuário.");
-      return;
-    }
-
-    const response = await fetch("/api/customer-portal", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        customerId: stripeCustomerId,
-      }),
-    });
-
-    const data = await response.json();
-
-    if (data.error) {
-      alert(data.error);
-      return;
-    }
-
-    if (data.url) {
-      window.location.href = data.url;
-    }
-  }
 
   async function handleSelectPlan(plan: string) {
     const {
@@ -94,43 +68,51 @@ export default function PlansPage() {
     window.location.href = data.url;
   }
 
+  function getPlanName(plan: string) {
+    if (plan === "essential") return "Essencial";
+    if (plan === "voice") return "Voz";
+    if (plan === "memory") return "Memória";
+    return "Gratuito";
+  }
+
+  function getStatusName(status: string) {
+    if (status === "active") return "Ativo";
+    if (status === "expired") return "Expirado";
+    return "Inativo";
+  }
+
   return (
     <main className="min-h-screen bg-[#F5F1EA] px-6 py-16">
       <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 mb-16">
-          <div>
-            <h1 className="text-5xl md:text-6xl font-semibold text-[#1E2A38] mb-5">
-              Escolha seu caminho
-            </h1>
+        <div className="mb-16">
+          <h1 className="text-5xl md:text-6xl font-semibold text-[#1E2A38] mb-5">
+            Escolha seu caminho
+          </h1>
 
-            <p className="text-[#4A5565] text-xl max-w-3xl leading-relaxed">
-              Tenha acesso ao Conselheiro da Fé da forma que melhor acompanha
-              sua jornada espiritual e emocional.
-            </p>
-          </div>
-
-          {stripeCustomerId && (
-            <button
-              onClick={handleCustomerPortal}
-              className="bg-white border border-[#C8A96B] text-[#8A6A35] hover:bg-[#EFE6D7] transition-all duration-300 px-6 py-4 rounded-2xl shadow-sm font-semibold"
-            >
-              Gerenciar / Cancelar assinatura
-            </button>
-          )}
+          <p className="text-[#4A5565] text-xl max-w-3xl leading-relaxed">
+            Tenha acesso ao Conselheiro da Fé da forma que melhor acompanha
+            sua jornada espiritual e emocional.
+          </p>
         </div>
 
         {currentPlan !== "free" && (
           <div className="mb-10 rounded-3xl border border-[#E8E1D4] bg-white p-6 shadow-sm text-[#1E2A38]">
-            Seu plano atual:{" "}
-            <strong>
-              {currentPlan === "essential"
-                ? "Essencial"
-                : currentPlan === "voice"
-                ? "Voz"
-                : currentPlan === "memory"
-                ? "Memória"
-                : currentPlan}
-            </strong>
+            <p>
+              Seu plano atual: <strong>{getPlanName(currentPlan)}</strong>
+            </p>
+
+            <p className="mt-2 text-[#4A5565]">
+              Status: <strong>{getStatusName(subscriptionStatus)}</strong>
+            </p>
+
+            {subscriptionExpiresAt && (
+              <p className="mt-2 text-[#4A5565]">
+                Válido até:{" "}
+                <strong>
+                  {new Date(subscriptionExpiresAt).toLocaleDateString("pt-BR")}
+                </strong>
+              </p>
+            )}
           </div>
         )}
 
