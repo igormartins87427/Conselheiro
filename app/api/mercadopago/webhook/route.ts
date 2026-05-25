@@ -22,7 +22,11 @@ export async function POST(req: Request) {
       return Response.json({ received: true });
     }
 
-    const paymentId = body.data.id;
+    const paymentId = body.data?.id;
+
+    if (!paymentId) {
+      return Response.json({ received: true });
+    }
 
     const paymentData = await payment.get({
       id: paymentId,
@@ -42,18 +46,32 @@ export async function POST(req: Request) {
 
     const [userId, plan] = externalReference.split("|");
 
-    await supabase
+    if (!userId || !plan) {
+      return Response.json({ received: true });
+    }
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+
+    const { data, error } = await supabase
       .from("profiles")
       .update({
         plan,
+        subscription_status: "active",
+        subscription_expires_at: expiresAt.toISOString(),
+        mercadopago_payment_id: String(paymentData.id),
+        daily_messages: 0,
+        last_message_reset: new Date().toISOString(),
       })
-      .eq("id", userId);
+      .eq("id", userId)
+      .select();
 
-    console.log("PLANO ATUALIZADO:", userId, plan);
+    console.log("PLANO ATUALIZADO:", data);
+    console.log("ERRO SUPABASE:", error);
 
     return Response.json({ success: true });
   } catch (error) {
-    console.log(error);
+    console.log("ERRO WEBHOOK MP:", error);
 
     return Response.json(
       {
